@@ -23,8 +23,8 @@ func handleClientConnection(clientConnection net.Conn) {
 	}
 	log.Println("Received Data", buf[:dataLength])
 
-	answer := "+PONG\r\n"
-	clientConnection.Write([]byte(answer))
+	answer := []byte("+PONG\r\n")
+	clientConnection.Write(answer)
 }
 
 func main() {
