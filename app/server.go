@@ -25,6 +25,7 @@ func handleClientConnection(clientConnection net.Conn) {
 
 	answer := []byte("+PONG\r\n")
 	clientConnection.Write(answer)
+	clientConnection.Write(answer)
 }
 
 func main() {
