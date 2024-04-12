@@ -13,7 +13,7 @@ type Server struct {
 }
 
 func handleClientConnection(clientConnection net.Conn) {
-	defer clientConnection.Close()
+	// defer clientConnection.Close()
 
 	// Read data
 	buf := make([]byte, 1024)
@@ -24,7 +24,6 @@ func handleClientConnection(clientConnection net.Conn) {
 	log.Println("Received Data", buf[:dataLength])
 
 	answer := []byte("+PONG\r\n")
-	clientConnection.Write(answer)
 	clientConnection.Write(answer)
 }
 
