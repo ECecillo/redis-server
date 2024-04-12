@@ -13,18 +13,20 @@ type Server struct {
 }
 
 func handleClientConnection(clientConnection net.Conn) {
-	// defer clientConnection.Close()
+	defer clientConnection.Close()
 
-	// Read data
-	buf := make([]byte, 1024)
-	dataLength, err := clientConnection.Read(buf)
-	if err != nil {
-		return
+	for {
+		// Read data
+		buf := make([]byte, 1024)
+		dataLength, err := clientConnection.Read(buf)
+		if err != nil {
+			continue
+		}
+		log.Println("Received Data", string(buf[:dataLength]))
+
+		answer := []byte("+PONG\r\n")
+		clientConnection.Write(answer)
 	}
-	log.Println("Received Data", buf[:dataLength])
-
-	answer := []byte("+PONG\r\n")
-	clientConnection.Write(answer)
 }
 
 func main() {
