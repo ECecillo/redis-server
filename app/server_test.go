@@ -19,7 +19,7 @@ func TestServerAnswerToPong(t *testing.T) {
 	}
 	defer client.Close()
 
-	_, err = client.Write([]byte("PING\r\n"))
+	_, err = client.Write([]byte("*1\r\n$4\r\nping\r\n"))
 	if err != nil {
 		t.Fatalf("(client) Error writing to server: %v", err)
 	}

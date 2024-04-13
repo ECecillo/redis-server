@@ -7,7 +7,6 @@ import (
 	"net"
 	"os"
 	"os/signal"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -102,9 +101,10 @@ func (s *Server) handleClientConnection(conn net.Conn) {
 			return
 		}
 		request := string(buf[:dataLength])
-		if strings.TrimSpace(request) == "PING" {
-			conn.Write([]byte("+PONG\r\n"))
-		}
+		fmt.Println(request)
+		// if strings.TrimSpace(request) == "*1\r\n$4\r\nping\r\n" {
+		conn.Write([]byte("+PONG\r\n"))
+		// }
 	}
 }
 
