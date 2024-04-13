@@ -2,54 +2,128 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
+	"os/signal"
+	"strings"
+	"sync"
+	"syscall"
+	"time"
 )
 
 type Server struct {
-	addr string
-	port int
+	wg         sync.WaitGroup
+	listener   net.Listener
+	shutdown   chan struct{}
+	connection chan net.Conn
 }
 
-func handleClientConnection(clientConnection net.Conn) {
-	defer clientConnection.Close()
+func NewServer(serverAddress string) (*Server, error) {
+	listener, err := net.Listen("tcp", serverAddress)
+	if err != nil {
+		return nil, fmt.Errorf("failed to listen on address %s: %w", serverAddress, err)
+	}
 
+	return &Server{
+		listener:   listener,
+		shutdown:   make(chan struct{}),
+		connection: make(chan net.Conn),
+	}, nil
+}
+
+func (s *Server) acceptConnections() {
+	defer s.wg.Done()
 	for {
-		// Read data
-		buf := make([]byte, 1024)
-		dataLength, err := clientConnection.Read(buf)
+		conn, err := s.listener.Accept()
 		if err != nil {
+			if netErr, ok := err.(*net.OpError); ok && !netErr.Temporary() {
+				log.Println("Listener closed, shutting down accept routine.")
+				return
+			}
+			log.Println("Error accepting connection:", err)
 			continue
 		}
-		log.Println("Received Data", string(buf[:dataLength]))
+		s.connection <- conn
+	}
+}
 
-		answer := []byte("+PONG\r\n")
-		clientConnection.Write(answer)
+func (s *Server) handleConnections() {
+	defer s.wg.Done()
+
+	for {
+		select {
+		case <-s.shutdown:
+			return
+		case conn := <-s.connection:
+			// In case we get a new connection run a go routine to handle it
+			go s.handleClientConnection(conn)
+		}
+	}
+}
+
+func (s *Server) Start() {
+	s.wg.Add(2)
+	go s.acceptConnections()
+	go s.handleConnections()
+}
+
+func (s *Server) Stop() {
+	close(s.shutdown)
+	s.listener.Close()
+
+	done := make(chan struct{})
+	go func() {
+		s.wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		return
+	case <-time.After(time.Second):
+		fmt.Println("Timed out waiting for connections to finish.")
+		return
+	}
+}
+
+func (s *Server) handleClientConnection(conn net.Conn) {
+	defer conn.Close()
+
+	for {
+		buf := make([]byte, 1024)
+		dataLength, err := conn.Read(buf)
+		if err == io.EOF {
+			break // Client closed connection
+		}
+		if err != nil {
+			log.Println("Error reading:", err)
+			return
+		}
+		request := string(buf[:dataLength])
+		if strings.TrimSpace(request) == "PING" {
+			conn.Write([]byte("+PONG\r\n"))
+		}
 	}
 }
 
 func main() {
-	serverConfig := Server{addr: "0.0.0.0", port: 6379}
-	server := fmt.Sprintf("%s:%d", serverConfig.addr, serverConfig.port)
-
-	fmt.Println("Logs from your program will appear here!")
-
-	listener, err := net.Listen("tcp", server)
+	serverAddress := "0.0.0.0:6379"
+	server, err := NewServer(serverAddress)
 	if err != nil {
-		fmt.Println("Failed to bind to port 6379")
+		fmt.Println("Error starting server:", err)
 		os.Exit(1)
 	}
-	defer listener.Close()
+	server.Start()
+	fmt.Println("Running server on ", serverAddress)
 
-	fmt.Println("Server listening on ", listener.Addr())
+	// Wait for a SIGINT or SIGTERM signal to gracefully shut down the server
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	<-sigChan
 
-	for {
-		connection, err := listener.Accept()
-		if err != nil {
-			fmt.Println("Error accepting connection: ", err.Error())
-			continue
-		}
-		handleClientConnection(connection)
-	}
+	fmt.Println("Shutting down server...")
+	server.Stop()
+	fmt.Println("Server stopped.")
 }
